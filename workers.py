@@ -7,7 +7,7 @@ import threading
 import datetime
 def taskStart(details, newTask):
     lockB.acquire()
-    log=open('logs/log.txt','a')
+    log=open('log.txt','a')
     log.write(details['workerID']+str(datetime.datetime.now())+'TaskStarting'+newTask['jobID']+newTask['taskID']+newTask['time'], sep=',')
     log.close()
     lockB.release()
@@ -17,9 +17,9 @@ def taskStart(details, newTask):
     details['tasks'][i][0]=newTask
     details['tasks'][i][1]=True
     details['freeSlots']-=1
-def listenNewTasks(details, tasks):
+def listenNewTasks(details):
     ear=socket.socket()
-    ear.bind((details['sender']),details['portNumber'])
+    ear.bind((details['sender'],int(details['portNumber'])))
     ear.listen()
     while(True):
         connection, address=ear.accept()
@@ -28,7 +28,7 @@ def listenNewTasks(details, tasks):
             msg=json.loads(msg)
             newTask={'jobID':msg['jobID'],'taskID':msg['taskID'],'timeLeft':msg['time']}
             lockB.acquire()
-            log=open('logs/log.txt','a')
+            log=open('log.txt','a')
             log.write(details['workerID']+str(datetime.datetime.now())+'TaskArrived'+msg['jobID']+msg['taskID']+msg['time'], sep=',')
             log.close()
             lockB.release()
@@ -47,7 +47,7 @@ def execution(details):
         elif details['tasks'][i][1] and details['tasks'][0]['timeLeft']<=0:
             removeTask=details['tasks'][i][0]
             lockB.acquire()
-            log=open('logs/log.txt','a')
+            log=open('log.txt','a')
             log.write(details['workerID']+str(datetime.datetime.now())+'TaskFinished'+removeTask['jobID']+removeTask['taskID']+removeTask['time'], sep=',')
             log.close()
             lockB.release()
@@ -65,7 +65,7 @@ def execution(details):
             sleep(1)
 lockA=threading.Lock()
 lockB=threading.Lock()
-details={'workerID':sys.argv[2], 'portNumber':sys.argv[1]}
+details={'workerID':sys.argv[2], 'portNumber':sys.argv[1], 'numSlots':0}
 conf_file=open('config.json')
 config=json.load(conf_file)
 for worker in config['workers']:
@@ -74,6 +74,8 @@ for worker in config['workers']:
         details['tasks']=[({},False) for i in range(worker['slots'])]
         details['freeSlots']=details['numSlots']
 conf_file.close()
+log=open("log.txt",'w') #to empty the contents
+log.close()
 details['sender']=socket.gethostbyname('localhost')
 thr1=threading.Thread(target=listenNewTasks, args=(details,))
 thr2=threading.Thread(target=execution, args=(details,))
