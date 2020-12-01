@@ -8,7 +8,7 @@ import datetime
 def taskStart(details, newTask):
     lockB.acquire()
     log=open('log.txt','a')
-    log.write(details['workerID']+','+str(datetime.datetime.now())+',TaskStarting'+','+newTask['jobID']+','+newTask['taskID']+','+newTask['time'])
+    log.write(str(details['workerID'])+','+str(datetime.datetime.now())+',TaskStarting'+','+str(newTask['jobID'])+','+newTask['taskID']+','+str(newTask['timeLeft'])+','+newTask['algo']+'\n')
     log.close()
     lockB.release()
     i=0
@@ -18,18 +18,20 @@ def taskStart(details, newTask):
     details['tasks'][i][1]=True
     details['freeSlots']-=1
 def listenNewTasks(details):
+    while details['numSlots']==0:
+        continue
     ear=socket.socket()
-    ear.bind((details['sender'],int(details['portNumber'])))
-    ear.listen()
+    ear.bind(('',int(details['portNumber'])))
+    ear.listen(256)
     while(True):
         connection, address=ear.accept()
         msg=connection.recv(1024).decode()
         if msg:
             msg=json.loads(msg)
-            newTask={'jobID':msg['jobID'],'taskID':msg['taskID'],'timeLeft':msg['time']}
+            newTask={'jobID':msg['jobID'],'taskID':msg['taskID'],'timeLeft':msg['time'],'algo':msg['algo']}
             lockB.acquire()
             log=open('log.txt','a')
-            log.write(details['workerID']+','+str(datetime.datetime.now())+',TaskArrived'+','+msg['jobID']+','+msg['taskID']+','+msg['time'])
+            log.write(str(details['workerID'])+','+str(datetime.datetime.now())+',TaskArrived'+','+str(msg['jobID'])+','+msg['taskID']+','+str(msg['time'])+','+msg['algo']+'\n')
             log.close()
             lockB.release()
             lockA.acquire()
@@ -41,16 +43,16 @@ def execution(details):
         continue
     i=0
     while True:
-        if details['tasks'][i][1] and details['tasks'][0]['timeLeft']>0:
+        if details['tasks'][i][1] and details['tasks'][i][0]['timeLeft']>0:
             lockA.acquire()
             details['tasks'][i][0]['timeLeft']-=1
             lockA.release()
-        elif details['tasks'][i][1] and details['tasks'][0]['timeLeft']<=0:
+        elif details['tasks'][i][1] and details['tasks'][i][0]['timeLeft']<=0:
             removeTask=details['tasks'][i][0]
             removeTask['workerID']=details['workerID']
             lockB.acquire()
             log=open('log.txt','a')
-            log.write(details['workerID']+','+str(datetime.datetime.now())+',TaskFinished'+','+removeTask['jobID']+','+removeTask['taskID']+','+removeTask['time'])
+            log.write(str(details['workerID'])+','+str(datetime.datetime.now())+',TaskFinished'+','+str(removeTask['jobID'])+','+removeTask['taskID']+','+str(removeTask['timeLeft'])+','+removeTask['algo']+'\n')
             log.close()
             lockB.release()
             lockA.acquire()
@@ -67,16 +69,17 @@ def execution(details):
 lockA=threading.Lock()
 lockB=threading.Lock()
 details={'workerID':sys.argv[2], 'portNumber':sys.argv[1], 'numSlots':0}
-conf_file=open('config.json')
-config=json.load(conf_file)
-for worker in config['workers']:
-    if worker['worker_id']==details['portNumber']:
-        details['numSlots']=worker['slots']
-        details['tasks']=[({},False) for i in range(worker['slots'])]
-        details['freeSlots']=details['numSlots']
-conf_file.close()
-log=open("log.txt",'w') #to empty the contents
-log.close()
+with open('config.json') as conf_file:
+    config=json.load(conf_file)
+    for worker in config['workers']:
+        if int(worker['worker_id'])==int(details['workerID']):
+            details['numSlots']=worker['slots']
+            details['tasks']=[[{},False] for i in range(worker['slots'])]
+            details['freeSlots']=details['numSlots']
+            break
+#conf_file.close()
+#log=open("log.txt",'w') #to empty the contents
+#log.close()
 details['sender']=socket.gethostbyname('localhost')
 thr1=threading.Thread(target=listenNewTasks, args=(details,))
 thr2=threading.Thread(target=execution, args=(details,))
