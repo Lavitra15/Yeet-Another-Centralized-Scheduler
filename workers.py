@@ -8,7 +8,7 @@ import datetime
 def taskStart(details, newTask):
     lockB.acquire()
     log=open('log.txt','a')
-    log.write(details['workerID']+str(datetime.datetime.now())+'TaskStarting'+newTask['jobID']+newTask['taskID']+newTask['time'], sep=',')
+    log.write(details['workerID']+','+str(datetime.datetime.now())+',TaskStarting'+','+newTask['jobID']+','+newTask['taskID']+','+newTask['time'])
     log.close()
     lockB.release()
     i=0
@@ -29,12 +29,13 @@ def listenNewTasks(details):
             newTask={'jobID':msg['jobID'],'taskID':msg['taskID'],'timeLeft':msg['time']}
             lockB.acquire()
             log=open('log.txt','a')
-            log.write(details['workerID']+str(datetime.datetime.now())+'TaskArrived'+msg['jobID']+msg['taskID']+msg['time'], sep=',')
+            log.write(details['workerID']+','+str(datetime.datetime.now())+',TaskArrived'+','+msg['jobID']+','+msg['taskID']+','+msg['time'])
             log.close()
             lockB.release()
             lockA.acquire()
             taskStart(details,newTask)
             lockA.release()
+        connection.close()
 def execution(details):
     while details['numSlots']==0:
         continue
@@ -46,9 +47,10 @@ def execution(details):
             lockA.release()
         elif details['tasks'][i][1] and details['tasks'][0]['timeLeft']<=0:
             removeTask=details['tasks'][i][0]
+            removeTask['workerID']=details['workerID']
             lockB.acquire()
             log=open('log.txt','a')
-            log.write(details['workerID']+str(datetime.datetime.now())+'TaskFinished'+removeTask['jobID']+removeTask['taskID']+removeTask['time'], sep=',')
+            log.write(details['workerID']+','+str(datetime.datetime.now())+',TaskFinished'+','+removeTask['jobID']+','+removeTask['taskID']+','+removeTask['time'])
             log.close()
             lockB.release()
             lockA.acquire()
@@ -59,7 +61,6 @@ def execution(details):
             mouth.connect(('localhost',5001))
             msg=json.dumps(removeTask).encode()
             mouth.send(msg)
-            mouth.close()
         i=(i+1)%details['numSlots']
         if i==0:
             sleep(1)
