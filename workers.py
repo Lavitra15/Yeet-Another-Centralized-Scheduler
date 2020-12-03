@@ -38,6 +38,7 @@ def listenNewTasks(details):
             taskStart(details,newTask)
             lockA.release()
         connection.close()
+        sleep(0.001)
 def execution(details):
     while details['numSlots']==0:
         continue
@@ -63,9 +64,11 @@ def execution(details):
             mouth.connect(('localhost',5001))
             msg=json.dumps(removeTask).encode()
             mouth.send(msg)
+            mouth.close()
         i=(i+1)%details['numSlots']
         if i==0:
             sleep(1)
+        sleep(0.001)
 lockA=threading.Lock()
 lockB=threading.Lock()
 details={'workerID':sys.argv[2], 'portNumber':sys.argv[1], 'numSlots':0}

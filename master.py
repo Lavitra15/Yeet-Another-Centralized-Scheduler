@@ -10,6 +10,7 @@ from time import sleep
 
 workerLock = threading.Lock()
 jobLock = threading.Lock()
+jobLock1 = threading.Lock()
 
 def RANDOM(task,workers,algo):
     while True:
@@ -21,6 +22,8 @@ def RANDOM(task,workers,algo):
             mouth1.connect(('Localhost',workers[choice]['port']))
             msg=json.dumps(task).encode()
             mouth1.send(msg)
+            mouth1.close()
+            break
         workerLock.release()
         sleep(0.001)
 
@@ -34,12 +37,14 @@ def RR(task,workers,algo):
             mouth2.connect(('Localhost',workers[i]['port']))
             msg=json.dumps(task).encode()
             mouth2.send(msg)
+            mouth2.close()
             workerLock.release()
             break
         workerLock.release()
         i=(i+1)%len(workers)
         if i==0:
             sleep(1)
+        sleep(0.001)
 
 def LL(task,workers,algo):
     while True:
@@ -56,6 +61,7 @@ def LL(task,workers,algo):
             mouth3.connect(('Localhost',workers[min_i]['port']))
             msg=json.dumps(task).encode()
             mouth3.send(msg)
+            mouth3.close()
             workerLock.release()
             break
         workerLock.release()
@@ -64,21 +70,35 @@ def LL(task,workers,algo):
 def yeetacs(jobs, algo, workers):
     algorithm={'RANDOM':RANDOM, 'RR':RR,'LL':LL}
     while True:
-        jobLock.acquire()
-        for job in jobs:
-            if len(jobs[job]['mapTasks'])>0:
-                for i in range(len(jobs[job]['mapTasks'])):
-                    if not jobs[job]['mapTasks'][i]['scheduled']:
-                        task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['mapTasks'][i]['task_id'],'time':jobs[job]['mapTasks'][i]['duration'],'algo':algo}
-                        algorithm[algo](task,workers,algo)
-                        jobs[job]['mapTasks'][i]['scheduled']=True
-            else:
+        while jobs:
+            jobLock.acquire()
+            flag=False
+            job=list(jobs.keys())[0]
+            for i in range(len(jobs[job]['mapTasks'])):
+                if jobs[job]['mapTasks'][i]['scheduled']==False:
+                    #print(jobs)
+                    task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['mapTasks'][i]['task_id'],'time':jobs[job]['mapTasks'][i]['duration'],'algo':algo}
+                    #print(task)
+                    jobs[job]['mapTasks'][i]['scheduled']=True
+                    algorithm[algo](task,workers,algo)
+                    jobLock.release()
+                    flag=True
+                    break
+            if not flag and len(jobs[job]['mapTasks'])==0:
                 for i in range(len(jobs[job]['reduceTasks'])):
-                    if not jobs[job]['reduceTasks'][i]['scheduled']:
+                    if jobs[job]['reduceTasks'][i]['scheduled']==False:
                         task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['reduceTasks'][i]['task_id'],'time':jobs[job]['reduceTasks'][i]['duration'],'algo':algo}
-                        algorithm[algo](task,workers,algo)
                         jobs[job]['reduceTasks'][i]['scheduled']=True
-        jobLock.release()
+                        #print(task)
+                        algorithm[algo](task,workers,algo)
+                        jobLock.release()
+                        flag=True
+                        break    
+            elif flag:
+                break
+            else:
+                jobLock.release()
+        #jobLock.release()
         sleep(0.001)
 
 def getJobRequests(jobs):
@@ -86,8 +106,8 @@ def getJobRequests(jobs):
     ear.bind(('',5000))
     ear.listen(500) #Can change this param if needed - to listen 
     while(True):
-        connection,address = ear.accept()
-        requests = connection.recv(65536).decode()
+        connection = ear.accept()
+        requests = connection[0].recv(65536).decode()
         arrival_time=datetime.datetime.now()
         job = json.loads(requests)
         jobLock.acquire()
@@ -96,16 +116,18 @@ def getJobRequests(jobs):
         log.write(str(arrival_time)+',JobArrived,'+job['job_id']+'\n')
         log.close()
         workerLock.release()
-        print(job)
+        #print(job)
         jobID = job['job_id']
         jobs[jobID] = {'mapTasks':job["map_tasks"], "reduceTasks":job["reduce_tasks"], 'jobID':jobID}
         for map_task in jobs[jobID]['mapTasks']:
             map_task['scheduled']=False
+            #map_task['completed']=False
         for reduce_task in jobs[jobID]['reduceTasks']:
             reduce_task['scheduled']=False
-        print(jobs)
+            #reduce_task['completed']=False
+        #print(jobs)
         jobLock.release()
-        connection.close()
+        connection[0].close()
         sleep(0.001)
 
 def getWorkerMessage(workers):
@@ -113,24 +135,36 @@ def getWorkerMessage(workers):
     ear2.bind(('',5001))
     ear2.listen(256)
     while True:
-        connection,address=ear2.accept()
-        msg=connection.recv(1024).decode()
+        connection=ear2.accept()
+        msg=connection[0].recv(1024).decode()
         removedTask=json.loads(msg)
         workerLock.acquire()
         workers[int(removedTask['workerID'])-1]['freeSlots']+=1
-        workerLock.release()
         jobLock.acquire()
+        print("CHECK")
         if 'M' in removedTask['taskID']:
-            jobs[removedTask['jobID']]['mapTasks'].pop([int(removedTask['taskID'].split('M')[-1])])
+            print('check')
+            for i in range(len(jobs[removedTask['jobID']]['mapTasks'])):
+                if jobs[removedTask['jobID']]['mapTasks'][i]['task_id']==removedTask['taskID']:
+                    jobs[removedTask['jobID']]['mapTasks'].pop(i)
+                    print(jobs[removedTask['jobID']]['mapTasks'])
+                    break
         else:
-            jobs[removedTask['jobID']]['reduceTasks'].pop([int(removedTask['taskID'].split('R')[-1])])
+            print('check')
+            for i in range(len(jobs[removedTask['jobID']]['reduceTasks'])):
+                if jobs[removedTask['jobID']]['reduceTasks'][i]['task_id']==removedTask['taskID']:
+                    jobs[removedTask['jobID']]['reduceTasks'].pop(i)
+                    print(jobs[removedTask['jobID']]['reduceTasks'])
+                    break
             if len(jobs[removedTask['jobID']]['reduceTasks'])==0:
                 log=open('masterlog.txt','a')
-                log.write(str(datetime.datetime.now())+',JobFinished,'+jobs['job_id']+'\n')
+                log.write(str(datetime.datetime.now())+',JobFinished,'+removedTask['jobID']+'\n')
                 log.close()
                 jobs.pop(removedTask['jobID'])
+        print("CHECK")
         jobLock.release()
-        connection.close()
+        workerLock.release()
+        connection[0].close()
         sleep(0.001)
 
 conf_file=sys.argv[1]
