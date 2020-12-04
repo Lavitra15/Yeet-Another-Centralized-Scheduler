@@ -24,7 +24,7 @@ def RANDOM(task,workers):
             break
         #release if no free slot found, it tries again
         workerLock.release()
-        sleep(0.001)
+        sleep(0.01)
 rr=0
 def RR(task,workers):
     global rr
@@ -45,7 +45,7 @@ def RR(task,workers):
         workerLock.release()
         #tries for next machine/worker if slot not found
         rr=(rr+1)%len(workers)
-        sleep(0.001)
+        sleep(0.01)
 def LL(task,workers):
     while True:
         workerLock.acquire()
@@ -89,8 +89,8 @@ def yeetacs(jobs, algo, workers):
                     if jobs[job]['mapTasks'][i]['scheduled']==False:
                         task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['mapTasks'][i]['task_id'],'time':jobs[job]['mapTasks'][i]['duration'],'algo':algo}
                         jobs[job]['mapTasks'][i]['scheduled']=True
-                        algorithm[algo](task,workers)
                         jobLock.release()
+                        algorithm[algo](task,workers)
                         #to make sure that reduce doesn't have to be run
                         flag=True
                         break
@@ -101,8 +101,8 @@ def yeetacs(jobs, algo, workers):
                         if jobs[job]['reduceTasks'][i]['scheduled']==False:
                             task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['reduceTasks'][i]['task_id'],'time':jobs[job]['reduceTasks'][i]['duration'],'algo':algo}
                             jobs[job]['reduceTasks'][i]['scheduled']=True
-                            algorithm[algo](task,workers)
                             jobLock.release()
+                            algorithm[algo](task,workers)
                             flag=True
                             break 
             if flag:
