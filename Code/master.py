@@ -83,31 +83,29 @@ def yeetacs(jobs, algo, workers):
                 jobLock.release()
                 sleep(0.01)
                 continue
-            job=list(jobs.keys())[0]
-            for i in range(len(jobs[job]['mapTasks'])):
-                #find the first map task that has not been scheduled yet
-                if jobs[job]['mapTasks'][i]['scheduled']==False:
-                    task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['mapTasks'][i]['task_id'],'time':jobs[job]['mapTasks'][i]['duration'],'algo':algo}
-                    jobs[job]['mapTasks'][i]['scheduled']=True
-                    algorithm[algo](task,workers)
-                    jobLock.release()
-                    #to make sure that reduce doesn't have to be run
-                    flag=True
-                    break
-            #if no map task was scheduled in this iteration and all have been completed
-            if not flag and len(jobs[job]['mapTasks'])==0:
-                for i in range(len(jobs[job]['reduceTasks'])):
-                    #search for the first job that has not be scheduled yet
-                    if jobs[job]['reduceTasks'][i]['scheduled']==False:
-                        task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['reduceTasks'][i]['task_id'],'time':jobs[job]['reduceTasks'][i]['duration'],'algo':algo}
-                        jobs[job]['reduceTasks'][i]['scheduled']=True
+            for job in list(jobs.keys()):
+                for i in range(len(jobs[job]['mapTasks'])):
+                    #find the first map task that has not been scheduled yet
+                    if jobs[job]['mapTasks'][i]['scheduled']==False:
+                        task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['mapTasks'][i]['task_id'],'time':jobs[job]['mapTasks'][i]['duration'],'algo':algo}
+                        jobs[job]['mapTasks'][i]['scheduled']=True
                         algorithm[algo](task,workers)
                         jobLock.release()
+                        #to make sure that reduce doesn't have to be run
                         flag=True
                         break
-                if not flag:
-                    jobLock.release()  
-            elif flag:
+                #if no map task was scheduled in this iteration and all have been completed
+                if not flag and len(jobs[job]['mapTasks'])==0:
+                    for i in range(len(jobs[job]['reduceTasks'])):
+                        #search for the first job that has not be scheduled yet
+                        if jobs[job]['reduceTasks'][i]['scheduled']==False:
+                            task={'jobID':jobs[job]['jobID'],'taskID':jobs[job]['reduceTasks'][i]['task_id'],'time':jobs[job]['reduceTasks'][i]['duration'],'algo':algo}
+                            jobs[job]['reduceTasks'][i]['scheduled']=True
+                            algorithm[algo](task,workers)
+                            jobLock.release()
+                            flag=True
+                            break 
+            if flag:
                 break
             else:
                 jobLock.release()
