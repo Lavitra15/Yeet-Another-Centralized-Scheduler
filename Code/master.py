@@ -24,7 +24,7 @@ def RANDOM(task,workers):
             break
         #release if no free slot found, it tries again
         workerLock.release()
-        sleep(0.01)
+        sleep(0.001)
 rr=0
 def RR(task,workers):
     global rr
@@ -45,7 +45,7 @@ def RR(task,workers):
         workerLock.release()
         #tries for next machine/worker if slot not found
         rr=(rr+1)%len(workers)
-        sleep(0.01)
+        sleep(0.001)
 def LL(task,workers):
     while True:
         workerLock.acquire()
@@ -104,7 +104,9 @@ def yeetacs(jobs, algo, workers):
                             jobLock.release()
                             algorithm[algo](task,workers)
                             flag=True
-                            break 
+                            break
+                if flag:
+                    break
             if flag:
                 break
             else:
@@ -190,6 +192,7 @@ workers = config['workers']
 for worker in workers:
     #adding a key-value pair called freeSlots that holds the total number of slots of each worker initially
     worker['freeSlots'] = worker['slots']
+    #os.system("python3 worker.py "+str(worker["port"])+" "+str(worker["worker_id"]))
 jobs={}
 thread1 = threading.Thread(target = getJobRequests, args=(jobs,algo))
 thread2 = threading.Thread(target = getWorkerMessage, args=(jobs, workers, algo))
